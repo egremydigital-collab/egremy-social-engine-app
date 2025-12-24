@@ -182,6 +182,53 @@ function getABVariants(variants: GenerationResult["ab_test_variants"]) {
   };
 }
 
+// ========== OPTIMIZATION HINT SYSTEM (Ajuste B) ==========
+
+type QualityDimension = "hook_strength" | "psp_structure" | "objective_alignment" | "seo_compliance" | "compliance";
+
+const OPTIMIZATION_HINTS: Record<QualityDimension, string> = {
+  hook_strength:
+    "el hook podría ser más disruptivo con un pattern interrupt visual más fuerte en 0–1.7s.",
+  psp_structure:
+    "refuerza la emoción en el bloque Problema (dolor específico + validación humana).",
+  objective_alignment:
+    "el CTA podría reforzar mejor el objetivo (ej. pedir envío por DM si buscas Sends).",
+  seo_compliance:
+    "agrega 1–2 keywords habladas en el audio y refuérzalas con texto en pantalla (safe zones).",
+  compliance:
+    "revisa que no haya engagement bait o claims sensibles innecesarios.",
+};
+
+function findWeakestDimension(
+  breakdown?: GenerationResult["quality_breakdown"]
+): { dimension: QualityDimension; score: number; max: number; pct: number } | null {
+  if (!breakdown) return null;
+
+  const maxMap: Record<QualityDimension, number> = {
+    hook_strength: 25,
+    psp_structure: 25,
+    objective_alignment: 20,
+    seo_compliance: 20,
+    compliance: 10,
+  };
+
+  const entries = Object.entries(breakdown) as [QualityDimension, number][];
+
+  let weakest: { dimension: QualityDimension; score: number; max: number; pct: number } | null = null;
+
+  entries.forEach(([dimension, score]) => {
+    const max = maxMap[dimension];
+    if (!max) return; // skip unknown dimensions
+    const pct = score / max;
+
+    if (!weakest || pct < weakest.pct) {
+      weakest = { dimension, score, max, pct };
+    }
+  });
+
+  return weakest;
+}
+
 export default function Result() {
   const nav = useNavigate();
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -226,6 +273,16 @@ export default function Result() {
   const screenTextArray = getScreenTextArray(result.production_pack.screen_text);
   const bRollArray = getBRoll(result.production_pack);
   const abVariants = getABVariants(result.ab_test_variants);
+
+  // Optimization Hint (Ajuste B) - Solo cuando score < 100
+  const weakestDimension =
+    result.quality_score !== undefined && result.quality_score < 100
+      ? findWeakestDimension(result.quality_breakdown)
+      : null;
+
+  const optimizationHint = weakestDimension
+    ? `Optimizable: ${OPTIMIZATION_HINTS[weakestDimension.dimension]} (Área: ${weakestDimension.dimension.replace(/_/g, " ")} ${Math.round(weakestDimension.pct * 100)}%)`
+    : null;
 
   const copyToClipboard = async (key: string, text: string) => {
     try {
@@ -346,6 +403,20 @@ ${result.seo_pack.alt_text}`;
             {result.rewrites_performed !== undefined && result.rewrites_performed > 0 && (
               <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: 12 }}>
                 🔄 Auto-optimizado {result.rewrites_performed} {result.rewrites_performed === 1 ? "vez" : "veces"}
+              </p>
+            )}
+            {/* Optimization Hint - Solo cuando score < 100 */}
+            {optimizationHint && (
+              <p
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: colors.textMuted,
+                  lineHeight: 1.5,
+                  maxWidth: 720,
+                }}
+              >
+                ✨ {optimizationHint}
               </p>
             )}
           </div>
