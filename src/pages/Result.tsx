@@ -5,35 +5,63 @@ interface GenerationResult {
   run_id: string;
   ai_model_used: string;
   risk_level_applied: string;
+  version?: string;
+  
+  // Quality Score (nuevo v6)
+  quality_score?: number;
+  quality_passed?: boolean;
+  quality_breakdown?: {
+    hook_strength: number;
+    psp_structure: number;
+    objective_alignment: number;
+    seo_compliance: number;
+    compliance: number;
+  };
+  rewrites_performed?: number;
+  
+  // Pilar y estrategia (nuevo v6)
+  objective_pilar?: string;
+  tono?: string;
+  
   hook: {
     code: string;
     text: string;
     category: string;
   };
   script_psp: {
-    hook: { time: string; text: string; visual_action: string; pattern_interrupt?: string };
+    hook: { time: string; text: string; visual_action: string; pattern_interrupt?: string; hook_type?: string };
     problem: { time: string; text: string; validation: string; emotion?: string };
     solution: { time: string; text: string; key_insight?: string; analogy?: string; visual_demo?: string };
-    proof_cta: { time: string; proof: string; cta: string; urgency_element?: string };
+    proof_cta: { time: string; proof: string; cta: string; urgency_element?: string; keyword_trigger?: string };
   };
   production_pack: {
-    screen_text: string[];
+    // Soporta ambos formatos (v4 array y v6 objeto)
+    screen_text: string[] | {
+      top_safe?: string;
+      center_main?: string;
+      bottom_cta?: string;
+    };
     cut_rhythm: string;
     visual_style: string;
     b_roll_suggestions?: string[];
+    b_roll?: string[];
     music_mood?: string;
   };
   seo_pack: {
-    audio_keywords: string[];
-    caption: string;
+    audio_keywords?: string[];
+    spoken_keywords?: string[];
+    caption?: string;
+    caption_frontloaded?: string;
     hashtags: string[];
     alt_text: string;
     best_posting_time?: string;
   };
   advanced_optimizations?: string[];
   ab_test_variants?: {
-    hook_variant: string;
-    cta_variant: string;
+    hook_variant?: string;
+    hook_b?: string;
+    cta_variant?: string;
+    cta_b?: string;
   };
 }
 
@@ -114,6 +142,46 @@ const tabButtonStyle = (isActive: boolean) => ({
   transition: "all 0.2s",
 });
 
+// ========== HELPERS PARA COMPATIBILIDAD v4/v6 ==========
+
+// Helper para obtener screen_text como array (compatible v4 y v6)
+function getScreenTextArray(screenText: string[] | { top_safe?: string; center_main?: string; bottom_cta?: string } | undefined): string[] {
+  if (!screenText) return [];
+  if (Array.isArray(screenText)) return screenText;
+  // Es objeto (v6)
+  const result: string[] = [];
+  if (screenText.top_safe) result.push(`[TOP] ${screenText.top_safe}`);
+  if (screenText.center_main) result.push(`[CENTER] ${screenText.center_main}`);
+  if (screenText.bottom_cta) result.push(`[BOTTOM] ${screenText.bottom_cta}`);
+  return result;
+}
+
+// Helper para obtener caption (compatible v4 y v6)
+function getCaption(seoPack: GenerationResult["seo_pack"]): string {
+  return seoPack.caption_frontloaded || seoPack.caption || "";
+}
+
+// Helper para obtener keywords (compatible v4 y v6)
+function getAudioKeywords(seoPack: GenerationResult["seo_pack"]): string[] {
+  return seoPack.spoken_keywords || seoPack.audio_keywords || [];
+}
+
+// Helper para obtener b_roll (compatible v4 y v6)
+function getBRoll(productionPack: GenerationResult["production_pack"]): string[] {
+  if (productionPack.b_roll) return productionPack.b_roll;
+  if (productionPack.b_roll_suggestions) return productionPack.b_roll_suggestions;
+  return [];
+}
+
+// Helper para obtener A/B variants (compatible v4 y v6)
+function getABVariants(variants: GenerationResult["ab_test_variants"]) {
+  if (!variants) return null;
+  return {
+    hook: variants.hook_variant || variants.hook_b || null,
+    cta: variants.cta_variant || variants.cta_b || null,
+  };
+}
+
 export default function Result() {
   const nav = useNavigate();
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -151,6 +219,13 @@ export default function Result() {
       </div>
     );
   }
+
+  // Variables helper para compatibilidad v4/v6
+  const caption = getCaption(result.seo_pack);
+  const audioKeywords = getAudioKeywords(result.seo_pack);
+  const screenTextArray = getScreenTextArray(result.production_pack.screen_text);
+  const bRollArray = getBRoll(result.production_pack);
+  const abVariants = getABVariants(result.ab_test_variants);
 
   const copyToClipboard = async (key: string, text: string) => {
     try {
@@ -206,7 +281,7 @@ ${b.text}${b.extra ? `\n\nVisual/nota: ${b.extra}` : ""}`
 ---
 
 📝 CAPTION:
-${result.seo_pack.caption}
+${caption}
 
 #️⃣ HASHTAGS:
 ${result.seo_pack.hashtags.join(" ")}
@@ -242,6 +317,50 @@ ${result.seo_pack.alt_text}`;
   };
 
   const isCopied = (key: string) => copiedKey === key;
+
+  // Quality Score Badge Component (nuevo v6)
+  const QualityScoreBadge = () => {
+    if (!result.quality_score) return null;
+    const score = result.quality_score;
+    const passed = result.quality_passed;
+    const bgColor = passed ? "rgba(16, 185, 129, 0.15)" : "rgba(251, 191, 36, 0.15)";
+    const borderColor = passed ? "rgba(16, 185, 129, 0.35)" : "rgba(251, 191, 36, 0.35)";
+    const textColor = passed ? colors.success : colors.warning;
+
+    return (
+      <div
+        style={{
+          ...cardStyle,
+          background: bgColor,
+          borderColor: borderColor,
+          marginTop: 16,
+          marginBottom: 0,
+          padding: 16,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <strong style={{ color: textColor, fontSize: 16 }}>
+              {passed ? "✅" : "⚠️"} Quality Score: {score}/100
+            </strong>
+            {result.rewrites_performed !== undefined && result.rewrites_performed > 0 && (
+              <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: 12 }}>
+                🔄 Auto-optimizado {result.rewrites_performed} {result.rewrites_performed === 1 ? "vez" : "veces"}
+              </p>
+            )}
+          </div>
+          {result.quality_breakdown && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ ...chipStyle, fontSize: 11 }}>Hook: {result.quality_breakdown.hook_strength}/25</span>
+              <span style={{ ...chipStyle, fontSize: 11 }}>PSP: {result.quality_breakdown.psp_structure}/25</span>
+              <span style={{ ...chipStyle, fontSize: 11 }}>Objetivo: {result.quality_breakdown.objective_alignment}/20</span>
+              <span style={{ ...chipStyle, fontSize: 11 }}>SEO: {result.quality_breakdown.seo_compliance}/20</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -308,6 +427,7 @@ ${result.seo_pack.alt_text}`;
                 🎬
               </span>
               Guion Generado
+              {result.version && <span style={{ fontSize: 12, color: colors.accent, marginLeft: 8 }}>{result.version}</span>}
             </h1>
 
             {/* A) Micro-hero Egremy (sutil, premium) */}
@@ -370,6 +490,9 @@ ${result.seo_pack.alt_text}`;
           </div>
         </div>
 
+        {/* Quality Score Badge (nuevo v6) - Solo TEAM */}
+        {viewMode === "TEAM" && <QualityScoreBadge />}
+
         {/* Meta chips - Solo TEAM */}
         {viewMode === "TEAM" && (
           <div style={{ display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" }}>
@@ -382,6 +505,16 @@ ${result.seo_pack.alt_text}`;
             <span style={chipStyle}>
               🎣 {result.hook.code} — {result.hook.category}
             </span>
+            {result.objective_pilar && (
+              <span style={{ ...chipStyle, background: colors.accentSoft, borderColor: colors.borderHover }}>
+                🎯 {result.objective_pilar}
+              </span>
+            )}
+            {result.tono && (
+              <span style={chipStyle}>
+                🗣️ {result.tono}
+              </span>
+            )}
           </div>
         )}
 
@@ -419,7 +552,7 @@ ${result.seo_pack.alt_text}`;
             </button>
 
             <button
-              onClick={() => copyToClipboard("Copiar Caption", result.seo_pack.caption)}
+              onClick={() => copyToClipboard("Copiar Caption", caption)}
               style={{
                 padding: "10px 16px",
                 background: isCopied("Copiar Caption") ? colors.accentSoft : "rgba(2,6,23,0.35)",
@@ -487,6 +620,11 @@ ${result.seo_pack.alt_text}`;
                   {result.script_psp.hook.pattern_interrupt && (
                     <p style={{ margin: "6px 0", color: colors.textMuted, fontSize: 13 }}>
                       🎯 <strong style={{ color: colors.text }}>Pattern Interrupt:</strong> {result.script_psp.hook.pattern_interrupt}
+                    </p>
+                  )}
+                  {result.script_psp.hook.hook_type && (
+                    <p style={{ margin: "6px 0", color: colors.textMuted, fontSize: 13 }}>
+                      🏷️ <strong style={{ color: colors.text }}>Tipo:</strong> {result.script_psp.hook.hook_type}
                     </p>
                   )}
                 </div>
@@ -584,29 +722,40 @@ ${result.seo_pack.alt_text}`;
               <p style={{ fontSize: 16, margin: "6px 0", color: colors.text, lineHeight: 1.5 }}>
                 <strong>CTA:</strong> "{result.script_psp.proof_cta.cta}"
               </p>
-              {viewMode === "TEAM" && result.script_psp.proof_cta.urgency_element && (
+              {viewMode === "TEAM" && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.ctaBorder}` }}>
-                  <p style={{ margin: "6px 0", color: colors.textMuted, fontSize: 13 }}>
-                    ⏰ <strong style={{ color: colors.text }}>Urgencia:</strong> {result.script_psp.proof_cta.urgency_element}
-                  </p>
+                  {result.script_psp.proof_cta.urgency_element && (
+                    <p style={{ margin: "6px 0", color: colors.textMuted, fontSize: 13 }}>
+                      ⏰ <strong style={{ color: colors.text }}>Urgencia:</strong> {result.script_psp.proof_cta.urgency_element}
+                    </p>
+                  )}
+                  {result.script_psp.proof_cta.keyword_trigger && (
+                    <p style={{ margin: "6px 0", color: colors.textMuted, fontSize: 13 }}>
+                      🔑 <strong style={{ color: colors.text }}>Keyword trigger:</strong> {result.script_psp.proof_cta.keyword_trigger}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
 
             {/* A/B TEST - Solo TEAM */}
-            {viewMode === "TEAM" && result.ab_test_variants && (
+            {viewMode === "TEAM" && abVariants && (abVariants.hook || abVariants.cta) && (
               <div style={{ marginTop: 24 }}>
                 <h3 style={{ fontSize: 18, marginBottom: 16, color: colors.text, fontWeight: 800 }}>🧪 Variantes A/B Test</h3>
 
-                <div style={{ ...cardStyle, background: colors.hookBg, borderColor: colors.hookBorder, marginBottom: 16 }}>
-                  <strong style={{ color: colors.hookText, fontWeight: 900 }}>🎣 Hook alternativo</strong>
-                  <p style={{ margin: "12px 0 0", color: colors.text, fontSize: 16 }}>"{result.ab_test_variants.hook_variant}"</p>
-                </div>
+                {abVariants.hook && (
+                  <div style={{ ...cardStyle, background: colors.hookBg, borderColor: colors.hookBorder, marginBottom: 16 }}>
+                    <strong style={{ color: colors.hookText, fontWeight: 900 }}>🎣 Hook alternativo</strong>
+                    <p style={{ margin: "12px 0 0", color: colors.text, fontSize: 16 }}>"{abVariants.hook}"</p>
+                  </div>
+                )}
 
-                <div style={{ ...cardStyle, background: colors.ctaBg, borderColor: colors.ctaBorder }}>
-                  <strong style={{ color: colors.ctaText, fontWeight: 900 }}>📲 CTA alternativo</strong>
-                  <p style={{ margin: "12px 0 0", color: colors.text, fontSize: 16 }}>"{result.ab_test_variants.cta_variant}"</p>
-                </div>
+                {abVariants.cta && (
+                  <div style={{ ...cardStyle, background: colors.ctaBg, borderColor: colors.ctaBorder }}>
+                    <strong style={{ color: colors.ctaText, fontWeight: 900 }}>📲 CTA alternativo</strong>
+                    <p style={{ margin: "12px 0 0", color: colors.text, fontSize: 16 }}>"{abVariants.cta}"</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -633,19 +782,21 @@ ${result.seo_pack.alt_text}`;
           <section style={{ marginTop: 24 }}>
             <h2 style={{ fontSize: 22, marginBottom: 20, color: colors.text, fontWeight: 800 }}>🎬 Production Pack</h2>
 
-            <div style={{ ...cardStyle, marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-                <strong style={{ color: colors.textMuted }}>📺 Textos en pantalla</strong>
-                <CopyButton text={result.production_pack.screen_text.join("\n")} label="Textos en pantalla" small />
+            {screenTextArray.length > 0 && (
+              <div style={{ ...cardStyle, marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                  <strong style={{ color: colors.textMuted }}>📺 Textos en pantalla</strong>
+                  <CopyButton text={screenTextArray.join("\n")} label="Textos en pantalla" small />
+                </div>
+                <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: colors.text }}>
+                  {screenTextArray.map((text, i) => (
+                    <li key={i} style={{ marginBottom: 6 }}>
+                      {text}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: colors.text }}>
-                {result.production_pack.screen_text.map((text, i) => (
-                  <li key={i} style={{ marginBottom: 6 }}>
-                    {text}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            )}
 
             <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div style={cardStyle}>
@@ -658,11 +809,11 @@ ${result.seo_pack.alt_text}`;
               </div>
             </div>
 
-            {result.production_pack.b_roll_suggestions && result.production_pack.b_roll_suggestions.length > 0 && (
+            {bRollArray.length > 0 && (
               <div style={{ ...cardStyle, marginBottom: 16 }}>
                 <strong style={{ color: colors.textMuted }}>🎥 B-Roll sugerido</strong>
                 <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: colors.text }}>
-                  {result.production_pack.b_roll_suggestions.map((item, i) => (
+                  {bRollArray.map((item, i) => (
                     <li key={i} style={{ marginBottom: 6 }}>
                       {item}
                     </li>
@@ -703,11 +854,11 @@ ${result.seo_pack.alt_text}`;
 
             <div style={{ ...cardStyle, marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-                <strong style={{ color: colors.textMuted }}>📝 Caption</strong>
-                <CopyButton text={result.seo_pack.caption} label="Caption" small />
+                <strong style={{ color: colors.textMuted }}>📝 Caption {result.seo_pack.caption_frontloaded ? "(Front-loaded)" : ""}</strong>
+                <CopyButton text={caption} label="Caption" small />
               </div>
               <p style={{ margin: "12px 0 0", color: colors.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                {result.seo_pack.caption}
+                {caption}
               </p>
             </div>
 
@@ -719,16 +870,18 @@ ${result.seo_pack.alt_text}`;
               <p style={{ margin: "12px 0 0", color: colors.accent, lineHeight: 1.6 }}>{result.seo_pack.hashtags.join(" ")}</p>
             </div>
 
-            <div style={{ ...cardStyle, marginBottom: 16 }}>
-              <strong style={{ color: colors.textMuted }}>🎤 Keywords Audio</strong>
-              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {result.seo_pack.audio_keywords.map((keyword, i) => (
-                  <span key={i} style={chipStyle}>
-                    {keyword}
-                  </span>
-                ))}
+            {audioKeywords.length > 0 && (
+              <div style={{ ...cardStyle, marginBottom: 16 }}>
+                <strong style={{ color: colors.textMuted }}>🎤 {result.seo_pack.spoken_keywords ? "Spoken Keywords (decir en audio)" : "Keywords Audio"}</strong>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {audioKeywords.map((keyword, i) => (
+                    <span key={i} style={chipStyle}>
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ ...cardStyle, marginBottom: 16 }}>
               <strong style={{ color: colors.textMuted }}>🖼️ Alt-text</strong>
@@ -794,6 +947,7 @@ ${result.seo_pack.alt_text}`;
         <div style={{ marginTop: 64, paddingTop: 24, borderTop: `1px solid ${colors.border}`, textAlign: "center" }}>
           <p style={{ margin: 0, lineHeight: 1.5 }}>
             <span style={{ color: colors.accent, fontWeight: 800 }}>Egremy Social Engine</span>
+            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v2.0</span>
             <br />
             <span style={{ color: "rgba(226,232,240,0.62)", fontSize: 11 }}>A system by Egremy Digital — Branding & Web Agency</span>
           </p>
