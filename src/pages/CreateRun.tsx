@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { generatePSPScript } from "../lib/edge";
 
 interface Project {
   id: string;
@@ -102,6 +103,229 @@ export default function CreateRun() {
   const [loading, setLoading] = useState(false);
   const [loadingProject, setLoadingProject] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [useKnowledgePack, setUseKnowledgePack] = useState(true);
+
+  // === BRAND DOMAIN CONFIG ===
+  const brand_domain: string = "egremy_branding"; // Default brand domain
+
+  // === DURATION SPECS (dynamic times based on selected duration) ===
+  const getDurationSpec = (duration: string) => {
+    switch (duration) {
+      case "7-15":
+        return { sec: 15, hook: "0-3s", problem: "3-8s", solution: "8-12s", proof_cta: "12-15s" };
+      case "60+":
+        return { sec: 90, hook: "0-3s", problem: "3-8s", solution: "8-75s", proof_cta: "75-90s" };
+      case "30-60":
+      default:
+        return { sec: 45, hook: "0-3s", problem: "3-8s", solution: "8-35s", proof_cta: "35-45s" };
+    }
+  };
+
+  // === MARKDOWN PARSER with DYNAMIC TIMES ===
+  const parseScriptFromMarkdown = (markdown: string, duration: string, formato_video: string, brandDomain: string) => {
+    const clean = markdown.replace(/\*\*/g, "").replace(/\r\n/g, "\n").trim();
+    const spec = getDurationSpec(duration);
+
+    // Extract caption before parsing sections
+    const captionSplit = clean.search(/---[\s\n]*(?:Caption|CAPTION)/i);
+    const scriptPart = captionSplit > 0 ? clean.substring(0, captionSplit) : clean;
+
+    // Regex patterns to extract section text
+    const hookRegex = /\[0-3s\]\s*HOOK:\s*\n?([\s\S]*?)(?=\n\[3-8s\]|$)/i;
+    const problemRegex = /\[3-8s\]\s*PROBLEMA:\s*\n?([\s\S]*?)(?=\n\[8-\d+s\]|$)/i;
+    const solutionRegex = /\[8-\d+s\]\s*SOLUC(?:IÓN|ION):\s*\n?([\s\S]*?)(?=\n\[\d+-\d+s\]|$)/i;
+    const closingRegex = /\[\d+-\d+s\]\s*(?:PRUEBA\s*\+?\s*CTA|CIERRE):\s*\n?([\s\S]*?)(?=\n---|$)/i;
+
+    const hookMatch = scriptPart.match(hookRegex);
+    const problemMatch = scriptPart.match(problemRegex);
+    const solutionMatch = scriptPart.match(solutionRegex);
+    const closingMatch = scriptPart.match(closingRegex);
+
+    // Text cleaner
+    const cleanText = (text: string | undefined) => {
+      if (!text) return "";
+      return text.replace(/^\s*[-*]\s*/gm, "").replace(/\n{2,}/g, " ").replace(/\n/g, " ").replace(/\s{2,}/g, " ").trim().replace(/^[""]|[""]$/g, "");
+    };
+
+    const closingText = cleanText(closingMatch?.[1]) || "";
+
+    // Parse proof and CTA from closing
+    let proof = "";
+    let cta = "";
+    const proofMatch = closingText.match(/Prueba:\s*(.*?)(?=\s*CTA:|$)/i);
+    const ctaMatch = closingText.match(/CTA:\s*(.*)/i);
+
+    if (proofMatch && ctaMatch) {
+      proof = proofMatch[1].trim();
+      cta = ctaMatch[1].trim();
+    } else {
+      // Try splitting by sentence patterns
+      const sentences = closingText.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim().length > 5);
+      const ctaPatterns = /comparte|envía|escribe|dm|mensaje|guarda|manda|pasa/i;
+      const proofPatterns = /observado|marcas|diferencia|nota|cuando|porque|resultado/i;
+      const proofSentences: string[] = [];
+      const ctaSentences: string[] = [];
+      sentences.forEach((s: string) => {
+        ctaPatterns.test(s.trim()) ? ctaSentences.push(s.trim()) : proofPatterns.test(s.trim()) || proofSentences.length === 0 ? proofSentences.push(s.trim()) : ctaSentences.push(s.trim());
+      });
+      proof = proofSentences.join(" ") || closingText;
+      cta = ctaSentences.join(" ") || "Si conoces a alguien que necesita esto, compártelo.";
+    }
+
+    return {
+      hook: {
+        time: spec.hook,    // ✅ DYNAMIC from duration
+        text: cleanText(hookMatch?.[1]) || "Hook generado por Knowledge Pack",
+        visual_action: `Formato: ${formato_video}`,
+        pattern_interrupt: "Curiosidad + Dolor",
+      },
+      problem: {
+        time: spec.problem,  // ✅ DYNAMIC from duration
+        text: cleanText(problemMatch?.[1]) || "Problema identificado",
+        validation: "Validación emocional del problema",
+        emotion: brandDomain === "dance_5678" ? "Duda → Confianza" : "Frustración → Esperanza",
+      },
+      solution: {
+        time: spec.solution,  // ✅ DYNAMIC from duration (was hardcoded "8-35s")
+        text: cleanText(solutionMatch?.[1]) || "Solución presentada",
+        key_insight: "Insight del Knowledge Pack",
+        visual_demo: "Demostración visual sugerida",
+      },
+      proof_cta: {
+        time: spec.proof_cta,  // ✅ DYNAMIC from duration (was hardcoded "35-45s")
+        proof: proof,
+        cta: cta,
+        urgency_element: "Urgencia sutil",
+      },
+    };
+  };
+
+  // === SEO PARSER ===
+  const parseSeoFromMarkdown = (markdown: string) => {
+    const captionRegex = /(?:Caption\s*(?:sugerido)?:?)\s*\n?([\s\S]*?)(?=\n\n|SEO|Keywords|\*"?SEO|$)/i;
+    const seoRegex = /(?:SEO\s*)?Keywords?:?\s*\n?([\s\S]*?)(?=\n\n|$)/i;
+
+    const captionMatch = markdown.match(captionRegex);
+    const seoMatch = markdown.match(seoRegex);
+    const hashtagMatch = markdown.match(/#[\wáéíóúñ]+/gi);
+
+    let caption = captionMatch?.[1]?.trim() || "";
+    caption = caption.replace(/\*\*/g, "").replace(/^[-*]\s*/gm, "").split("\n")[0]?.trim() || "";
+
+    let keywords: string[] = [];
+    if (seoMatch?.[1]) {
+      keywords = seoMatch[1]
+        .replace(/\*\*/g, "")
+        .replace(/^[-*]\s*/gm, "")
+        .split(",")
+        .map((k: string) => k.trim())
+        .filter((k: string) => k.length > 0 && k.length < 50);
+    }
+
+    return {
+      caption: caption,
+      caption_frontloaded: caption,
+      hashtags: hashtagMatch || ["#EgremyEngine", "#ContentStrategy"],
+      alt_text: `Video sobre ${caption.substring(0, 60)}`,
+      spoken_keywords: keywords.length > 0 ? keywords : ["estrategia", "contenido", "marca"],
+    };
+  };
+
+  // === KNOWLEDGE PACK SUBMIT HANDLER ===
+  const handleKnowledgePackSubmit = async () => {
+    if (!formData.niche || !formData.pillar) {
+      alert("Por favor completa Nicho y Pilar");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const topic = `${formData.pillar} para ${formData.niche}`;
+      const durationMap: Record<string, number> = { "7-15": 15, "30-60": 45, "60+": 90 };
+      const mode = brand_domain === "dance_5678" ? "5678_emotional" : "egremy_hard";
+
+      const response = await generatePSPScript({
+        topic,
+        platform: formData.platform === "IG" ? "instagram" : formData.platform === "TT" ? "tiktok" : "instagram",
+        duration_sec: durationMap[formData.duration] || 45,
+        audience: brand_domain === "dance_5678" ? "dancers_and_moms" : "founders",
+        mode,
+        brand_domain,
+        niche: formData.niche,
+        pillar: formData.pillar,
+        objective: formData.objective,
+        awareness: formData.awareness,
+        cta_dest: formData.cta_dest,
+        risk_level: formData.risk_level,
+        objective_pilar: formData.objective_pilar,
+        tono: formData.tono,
+        formato_video: formData.formato_video,
+        language: formData.language,
+      });
+
+      // ✅ FIX: Use script_psp from response if available (v3.7.1+), otherwise parse markdown
+      const scriptPSP = response.script_psp 
+        ? response.script_psp 
+        : parseScriptFromMarkdown(response.final.script, formData.duration, formData.formato_video, brand_domain);
+
+      const seoPack = response.seo_pack 
+        ? response.seo_pack 
+        : parseSeoFromMarkdown(response.final.script);
+
+      const versionLabel = brand_domain === "dance_5678" ? "5,6,7,8 Pack v1.0" : "Knowledge Pack v2.2";
+
+      const generationResult = {
+        run_id: response.run_id || `kp-${Date.now()}`,
+        ai_model_used: brand_domain === "dance_5678" ? "5678 Pack + GPT-4" : "Knowledge Pack + GPT-4",
+        risk_level_applied: formData.risk_level,
+        version: versionLabel,
+        brand_domain,
+        voice_profile: response.voice_profile,
+        quality_score: response.final.evaluation.total,
+        quality_passed: response.final.evaluation.total >= (brand_domain === "dance_5678" ? 85 : 80),
+        quality_breakdown: {
+          hook_strength: response.final.evaluation.hook_strength,
+          psp_structure: response.final.evaluation.psp_structure,
+          objective_alignment: response.final.evaluation.voice_score || response.final.evaluation.egremy_voice || 0,
+          seo_compliance: response.final.evaluation.seo_compliance,
+          compliance: response.final.evaluation.shareability,
+        },
+        rewrites_performed: response.final.rewritten ? response.final.rewrite_count : 0,
+        objective_pilar: formData.objective_pilar,
+        tono: formData.tono,
+        hook: {
+          code: brand_domain === "dance_5678" ? "5678" : "KP",
+          text: (response.hook_selection?.adapted_hook || scriptPSP.hook.text).substring(0, 50) + "...",
+          category: response.hook_selection?.selected_hook_id || "AI + Knowledge",
+        },
+        script_psp: scriptPSP,
+        production_pack: response.production_pack || {
+          screen_text: [],
+          cut_rhythm: "Adaptar según duración",
+          visual_style: formData.formato_video,
+          b_roll_suggestions: [],
+          music_mood: "Según tono: " + formData.tono,
+        },
+        seo_pack: seoPack,
+        knowledge_sources: response.knowledge_sources,
+        retrieved_preview: response.retrieved_preview,
+        hook_selection: response.hook_selection,
+        _isKnowledgePack: true,
+        _isDance5678: brand_domain === "dance_5678",
+      };
+
+      localStorage.setItem("generation_result", JSON.stringify(generationResult));
+      localStorage.setItem("run_form_data", JSON.stringify(formData));
+      localStorage.setItem("generation_mode", brand_domain === "dance_5678" ? "DANCE_5678" : "KNOWLEDGE_PACK");
+      nav("/result");
+    } catch (error: any) {
+      console.error("Error Knowledge Pack:", error);
+      alert("Error: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const loadProject = async () => {
@@ -610,9 +834,66 @@ export default function CreateRun() {
             )}
           </div>
 
+          {/* ============================================ */}
+          {/* KNOWLEDGE PACK TOGGLE */}
+          {/* ============================================ */}
+          <div style={{ marginBottom: 20 }}>
+            <div
+              onClick={() => setUseKnowledgePack(!useKnowledgePack)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "14px 16px",
+                background: useKnowledgePack ? colors.accentSoft : "rgba(2,6,23,0.30)",
+                border: `1px solid ${useKnowledgePack ? "rgba(34,242,196,0.45)" : colors.border}`,
+                borderRadius: 12,
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  background: useKnowledgePack
+                    ? `linear-gradient(135deg, ${colors.accent}, #14b8a6)`
+                    : "rgba(100,116,139,0.3)",
+                  position: "relative",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    background: "#fff",
+                    position: "absolute",
+                    top: 3,
+                    left: useKnowledgePack ? 23 : 3,
+                    transition: "all 0.2s",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+                  }}
+                />
+              </div>
+              <div>
+                <span style={{ color: colors.text, fontWeight: 800, fontSize: 13 }}>
+                  🧠 Knowledge Pack {useKnowledgePack ? "ON" : "OFF"}
+                </span>
+                <span style={{ display: "block", fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                  {useKnowledgePack
+                    ? "Hooks de biblioteca + Quality Score + Voz Egremy"
+                    : "Flujo clásico: hooks sugeridos por IA"}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Submit */}
           <button
-            onClick={handleSubmit}
+            onClick={useKnowledgePack ? handleKnowledgePackSubmit : handleSubmit}
             disabled={loading}
             style={{
               ...glowButton,
@@ -636,7 +917,10 @@ export default function CreateRun() {
               e.currentTarget.style.boxShadow = glowButton.boxShadow;
             }}
           >
-            {loading ? "🔄 Generando hooks inteligentes..." : "🎣 Obtener Hooks Sugeridos"}
+            {loading 
+              ? (useKnowledgePack ? "🧠 Generando con Knowledge Pack..." : "🔄 Generando hooks inteligentes...") 
+              : (useKnowledgePack ? "🧠 Generar con Knowledge Pack" : "🎣 Obtener Hooks Sugeridos")
+            }
           </button>
 
           <p style={{ margin: "12px 0 0", color: "rgba(226,232,240,0.55)", fontSize: 12, textAlign: "center" }}>
