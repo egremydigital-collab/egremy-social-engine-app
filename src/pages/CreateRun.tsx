@@ -104,9 +104,7 @@ export default function CreateRun() {
   const [loadingProject, setLoadingProject] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [useKnowledgePack, setUseKnowledgePack] = useState(true);
-
-  // === BRAND DOMAIN CONFIG ===
-  const brand_domain: string = "egremy_branding"; // Default brand domain
+  const [brandDomain, setBrandDomain] = useState<string>("egremy_branding");
 
   // === DURATION SPECS (dynamic times based on selected duration) ===
   const getDurationSpec = (duration: string) => {
@@ -243,15 +241,15 @@ export default function CreateRun() {
     try {
       const topic = `${formData.pillar} para ${formData.niche}`;
       const durationMap: Record<string, number> = { "7-15": 15, "30-60": 45, "60+": 90 };
-      const mode = brand_domain === "dance_5678" ? "5678_emotional" : "egremy_hard";
+      const mode = brandDomain === "dance_5678" ? "5678_emotional" : "egremy_hard";
 
       const response = await generatePSPScript({
         topic,
         platform: formData.platform === "IG" ? "instagram" : formData.platform === "TT" ? "tiktok" : "instagram",
         duration_sec: durationMap[formData.duration] || 45,
-        audience: brand_domain === "dance_5678" ? "dancers_and_moms" : "founders",
+        audience: brandDomain === "dance_5678" ? "dancers_and_moms" : "founders",
         mode,
-        brand_domain,
+        brand_domain: brandDomain,
         niche: formData.niche,
         pillar: formData.pillar,
         objective: formData.objective,
@@ -267,23 +265,23 @@ export default function CreateRun() {
       // ✅ FIX: Use script_psp from response if available (v3.7.1+), otherwise parse markdown
       const scriptPSP = response.script_psp 
         ? response.script_psp 
-        : parseScriptFromMarkdown(response.final.script, formData.duration, formData.formato_video, brand_domain);
+        : parseScriptFromMarkdown(response.final.script, formData.duration, formData.formato_video, brandDomain);
 
       const seoPack = response.seo_pack 
         ? response.seo_pack 
         : parseSeoFromMarkdown(response.final.script);
 
-      const versionLabel = brand_domain === "dance_5678" ? "5,6,7,8 Pack v1.0" : "Knowledge Pack v2.2";
+      const versionLabel = brandDomain === "dance_5678" ? "5,6,7,8 Pack v1.0" : "Knowledge Pack v2.2";
 
       const generationResult = {
         run_id: response.run_id || `kp-${Date.now()}`,
-        ai_model_used: brand_domain === "dance_5678" ? "5678 Pack + GPT-4" : "Knowledge Pack + GPT-4",
+        ai_model_used: brandDomain === "dance_5678" ? "5678 Pack + GPT-4" : "Knowledge Pack + GPT-4",
         risk_level_applied: formData.risk_level,
         version: versionLabel,
-        brand_domain,
+        brand_domain: brandDomain,
         voice_profile: response.voice_profile,
         quality_score: response.final.evaluation.total,
-        quality_passed: response.final.evaluation.total >= (brand_domain === "dance_5678" ? 85 : 80),
+        quality_passed: response.final.evaluation.total >= (brandDomain === "dance_5678" ? 85 : 80),
         quality_breakdown: {
           hook_strength: response.final.evaluation.hook_strength,
           psp_structure: response.final.evaluation.psp_structure,
@@ -295,7 +293,7 @@ export default function CreateRun() {
         objective_pilar: formData.objective_pilar,
         tono: formData.tono,
         hook: {
-          code: brand_domain === "dance_5678" ? "5678" : "KP",
+          code: brandDomain === "dance_5678" ? "5678" : "KP",
           text: (response.hook_selection?.adapted_hook || scriptPSP.hook.text).substring(0, 50) + "...",
           category: response.hook_selection?.selected_hook_id || "AI + Knowledge",
         },
@@ -312,12 +310,12 @@ export default function CreateRun() {
         retrieved_preview: response.retrieved_preview,
         hook_selection: response.hook_selection,
         _isKnowledgePack: true,
-        _isDance5678: brand_domain === "dance_5678",
+        _isDance5678: brandDomain === "dance_5678",
       };
 
       localStorage.setItem("generation_result", JSON.stringify(generationResult));
       localStorage.setItem("run_form_data", JSON.stringify(formData));
-      localStorage.setItem("generation_mode", brand_domain === "dance_5678" ? "DANCE_5678" : "KNOWLEDGE_PACK");
+      localStorage.setItem("generation_mode", brandDomain === "dance_5678" ? "DANCE_5678" : "KNOWLEDGE_PACK");
       nav("/result");
     } catch (error: any) {
       console.error("Error Knowledge Pack:", error);
@@ -584,6 +582,138 @@ export default function CreateRun() {
           </div>
         )}
 
+        {/* ============================================ */}
+        {/* KNOWLEDGE PACK TOGGLE + DOMAIN SELECTOR */}
+        {/* ============================================ */}
+        <div
+          style={{
+            background: useKnowledgePack 
+              ? "linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(88, 28, 135, 0.20) 100%)"
+              : colors.panel,
+            border: `1px solid ${useKnowledgePack ? "rgba(139, 92, 246, 0.40)" : colors.border}`,
+            borderRadius: 16,
+            padding: "16px 20px",
+            marginBottom: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backdropFilter: "blur(8px)",
+            transition: "all 0.3s ease",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>🧠</span>
+            <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: 14 }}>Knowledge Pack</span>
+            {useKnowledgePack && (
+              <span style={{
+                background: "rgba(139, 92, 246, 0.35)",
+                color: "#c4b5fd",
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "3px 8px",
+                borderRadius: 6,
+                letterSpacing: 0.5,
+                textTransform: "uppercase" as const,
+              }}>ACTIVO</span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {useKnowledgePack && (
+              <span style={{ color: colors.textMuted, fontSize: 11 }}>
+                Genera con criterio Egremy + Quality Score + Auto-optimización
+              </span>
+            )}
+            <div
+              onClick={() => setUseKnowledgePack(!useKnowledgePack)}
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                background: useKnowledgePack ? "rgba(139, 92, 246, 0.6)" : "rgba(100, 116, 139, 0.3)",
+                cursor: "pointer",
+                position: "relative" as const,
+                transition: "all 0.3s",
+              }}
+            >
+              <div style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                background: useKnowledgePack ? "#a78bfa" : "#94a3b8",
+                position: "absolute" as const,
+                top: 3,
+                left: useKnowledgePack ? 23 : 3,
+                transition: "all 0.3s",
+                boxShadow: useKnowledgePack ? "0 0 8px rgba(167, 139, 250, 0.5)" : "none",
+              }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Domain selector (only when KP is ON) */}
+        {useKnowledgePack && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+            marginBottom: 18,
+          }}>
+            {/* Egremy Branding */}
+            <div
+              onClick={() => setBrandDomain("egremy_branding")}
+              style={{
+                background: brandDomain === "egremy_branding"
+                  ? "linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(88, 28, 135, 0.15) 100%)"
+                  : colors.panel,
+                border: `1.5px solid ${brandDomain === "egremy_branding" ? "rgba(139, 92, 246, 0.50)" : colors.border}`,
+                borderRadius: 14,
+                padding: "14px 16px",
+                cursor: "pointer",
+                transition: "all 0.25s",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 16 }}>🏢</span>
+                <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: 13 }}>Egremy Branding</span>
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: colors.textMuted, lineHeight: 1.4 }}>
+                Fundadores, B2B, posicionamiento estratégico
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: 10, color: brandDomain === "egremy_branding" ? "#c4b5fd" : colors.textMuted }}>
+                <strong>Tono:</strong> Directo, confrontativo, fundador-a-fundador<br/>
+                <strong>Audiencia:</strong> Founders, CEOs, empresarios
+              </p>
+            </div>
+
+            {/* 5,6,7,8 Dance */}
+            <div
+              onClick={() => setBrandDomain("dance_5678")}
+              style={{
+                background: brandDomain === "dance_5678"
+                  ? "linear-gradient(135deg, rgba(236, 72, 153, 0.18) 0%, rgba(168, 34, 108, 0.15) 100%)"
+                  : colors.panel,
+                border: `1.5px solid ${brandDomain === "dance_5678" ? "rgba(236, 72, 153, 0.50)" : colors.border}`,
+                borderRadius: 14,
+                padding: "14px 16px",
+                cursor: "pointer",
+                transition: "all 0.25s",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 16 }}>👯</span>
+                <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: 13 }}>5,6,7,8 Dance</span>
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: colors.textMuted, lineHeight: 1.4 }}>
+                Bailarinas jóvenes, dance moms, aspiracional
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: 10, color: brandDomain === "dance_5678" ? "#f9a8d4" : colors.textMuted }}>
+                <strong>Tono:</strong> Emocional, inspiracional, empoderador<br/>
+                <strong>Audiencia:</strong> Niñas 6-18 años, mamás
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Card container */}
         <div
           style={{
@@ -834,63 +964,6 @@ export default function CreateRun() {
             )}
           </div>
 
-          {/* ============================================ */}
-          {/* KNOWLEDGE PACK TOGGLE */}
-          {/* ============================================ */}
-          <div style={{ marginBottom: 20 }}>
-            <div
-              onClick={() => setUseKnowledgePack(!useKnowledgePack)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "14px 16px",
-                background: useKnowledgePack ? colors.accentSoft : "rgba(2,6,23,0.30)",
-                border: `1px solid ${useKnowledgePack ? "rgba(34,242,196,0.45)" : colors.border}`,
-                borderRadius: 12,
-                cursor: "pointer",
-                transition: "all 0.2s",
-              }}
-            >
-              <div
-                style={{
-                  width: 44,
-                  height: 24,
-                  borderRadius: 12,
-                  background: useKnowledgePack
-                    ? `linear-gradient(135deg, ${colors.accent}, #14b8a6)`
-                    : "rgba(100,116,139,0.3)",
-                  position: "relative",
-                  transition: "all 0.2s",
-                }}
-              >
-                <div
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    background: "#fff",
-                    position: "absolute",
-                    top: 3,
-                    left: useKnowledgePack ? 23 : 3,
-                    transition: "all 0.2s",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                  }}
-                />
-              </div>
-              <div>
-                <span style={{ color: colors.text, fontWeight: 800, fontSize: 13 }}>
-                  🧠 Knowledge Pack {useKnowledgePack ? "ON" : "OFF"}
-                </span>
-                <span style={{ display: "block", fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                  {useKnowledgePack
-                    ? "Hooks de biblioteca + Quality Score + Voz Egremy"
-                    : "Flujo clásico: hooks sugeridos por IA"}
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Submit */}
           <button
             onClick={useKnowledgePack ? handleKnowledgePackSubmit : handleSubmit}
@@ -948,6 +1021,25 @@ export default function CreateRun() {
           </p>
         </div>
 
+        {/* Knowledge Pack Info Box */}
+        {useKnowledgePack && (
+          <div style={{
+            background: "linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(88, 28, 135, 0.06) 100%)",
+            border: "1px solid rgba(139, 92, 246, 0.25)",
+            borderRadius: 14,
+            padding: "14px 18px",
+            marginTop: 6,
+          }}>
+            <p style={{ margin: 0, fontSize: 12, color: "#c4b5fd", fontWeight: 800 }}>
+              🧠 Knowledge Pack Activo
+            </p>
+            <p style={{ margin: "6px 0 0", fontSize: 11, color: colors.textMuted, lineHeight: 1.5 }}>
+              <strong>Flujo:</strong> El sistema busca criterios relevantes en el Knowledge Pack Egremy, genera el script, lo evalúa con Quality Score (5 dimensiones), y si está bajo 80 puntos, lo reescribe automáticamente.<br/>
+              <strong>Resultado:</strong> Script optimizado + Score + Fuentes de conocimiento usadas.
+            </p>
+          </div>
+        )}
+
         {/* Footer Egremy */}
         <div
           style={{
@@ -959,7 +1051,8 @@ export default function CreateRun() {
         >
           <p style={{ margin: 0, color: colors.textMuted, fontSize: 12, lineHeight: 1.5 }}>
             <span style={{ color: colors.accent, fontWeight: 800 }}>Egremy Social Engine</span>
-            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v2.0</span>
+            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v3.8</span>
+            <span style={{ marginLeft: 6, color: "#c4b5fd", fontSize: 10, fontWeight: 700 }}>+ Knowledge Pack</span>
             <br />
             <span style={{ fontSize: 11, color: "rgba(226,232,240,0.75)" }}>
               A system by Egremy Digital — Branding & Web Agency
