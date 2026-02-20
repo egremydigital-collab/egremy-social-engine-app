@@ -230,7 +230,7 @@ export default function CreateRun() {
   };
 
   // === KNOWLEDGE PACK SUBMIT HANDLER ===
-  const handleKnowledgePackSubmit = async () => {
+  const handleKnowledgePackSubmit = async (variantCount: 1 | 3 = 1) => {
     if (!formData.niche || !formData.pillar) {
       alert("Por favor completa Nicho y Pilar");
       return;
@@ -260,7 +260,75 @@ export default function CreateRun() {
         tono: formData.tono,
         formato_video: formData.formato_video,
         language: formData.language,
+        variants: variantCount,
       });
+
+      // ============================================================
+      // MULTI-VARIANT MODE (variants=3)
+      // ============================================================
+      if (response.mode === "multi_variant" && response.variants) {
+        const processedVariants = response.variants.map((variant: any, idx: number) => {
+          const scriptPSP = variant.script_psp 
+            ? variant.script_psp 
+            : parseScriptFromMarkdown(variant.final?.script || "", formData.duration, formData.formato_video, brandDomain);
+
+          const seoPack = variant.seo_pack 
+            ? variant.seo_pack 
+            : parseSeoFromMarkdown(variant.final?.script || "");
+
+          const vLabel = brandDomain === "dance_5678" ? "5,6,7,8 Pack v1.0" : "Knowledge Pack v2.2";
+
+          return {
+            variant_index: idx + 1,
+            run_id: variant.run_id || `kp-var${idx + 1}-${Date.now()}`,
+            ai_model_used: variant.ai_model_used || "Claude Sonnet 4.5",
+            risk_level_applied: formData.risk_level,
+            version: vLabel,
+            brand_domain: brandDomain,
+            voice_profile: response.voice_profile,
+            quality_score: variant.quality_score || variant.final?.evaluation?.total || 0,
+            quality_passed: (variant.quality_score || 0) >= (brandDomain === "dance_5678" ? 85 : 80),
+            quality_breakdown: variant.quality_breakdown || {
+              hook_strength: variant.final?.evaluation?.hook_strength || 0,
+              psp_structure: variant.final?.evaluation?.psp_structure || 0,
+              objective_alignment: variant.final?.evaluation?.voice_score || 0,
+              seo_compliance: variant.final?.evaluation?.seo_compliance || 0,
+              compliance: variant.final?.evaluation?.shareability || 0,
+            },
+            rewrites_performed: variant.rewrites_performed || 0,
+            objective_pilar: formData.objective_pilar,
+            tono: formData.tono,
+            hook: variant.hook || {
+              code: "KP",
+              text: (variant.hook_selection?.adapted_hook || "Hook generado").substring(0, 50) + "...",
+              category: variant.hook_selection?.selected_hook_id || "AI",
+            },
+            script_psp: scriptPSP,
+            production_pack: variant.production_pack || {
+              screen_text: [],
+              cut_rhythm: "Adaptar según duración",
+              visual_style: formData.formato_video,
+              b_roll_suggestions: [],
+              music_mood: "Según tono: " + formData.tono,
+            },
+            seo_pack: seoPack,
+            knowledge_sources: response.knowledge_sources,
+            hook_selection: variant.hook_selection,
+            _isKnowledgePack: true,
+            _isDance5678: brandDomain === "dance_5678",
+          };
+        });
+
+        localStorage.setItem("generation_variants", JSON.stringify(processedVariants));
+        localStorage.setItem("generation_mode", "MULTI_VARIANT");
+        localStorage.setItem("run_form_data", JSON.stringify(formData));
+        nav("/result");
+        return;
+      }
+
+      // ============================================================
+      // SINGLE VARIANT MODE (backward compatible)
+      // ============================================================
 
       // ✅ FIX: Use script_psp from response if available (v3.7.1+), otherwise parse markdown
       const scriptPSP = response.script_psp 
@@ -964,37 +1032,73 @@ export default function CreateRun() {
             )}
           </div>
 
-          {/* Submit */}
-          <button
-            onClick={useKnowledgePack ? handleKnowledgePackSubmit : handleSubmit}
-            disabled={loading}
-            style={{
-              ...glowButton,
-              padding: 18,
-              fontSize: 16,
-              cursor: loading ? "not-allowed" : "pointer",
-              borderRadius: 14,
-              marginTop: 8,
-              width: "100%",
-              opacity: loading ? 0.75 : 1,
-              transition: "all 0.25s",
-            }}
-            onMouseEnter={(e) => {
-              if (loading) return;
-              e.currentTarget.style.transform = "translateY(-1px)";
-              e.currentTarget.style.boxShadow = `0 0 32px ${colors.accentGlow}, 0 18px 45px rgba(0,0,0,0.50)`;
-            }}
-            onMouseLeave={(e) => {
-              if (loading) return;
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = glowButton.boxShadow;
-            }}
-          >
-            {loading 
-              ? (useKnowledgePack ? "🧠 Generando con Knowledge Pack..." : "🔄 Generando hooks inteligentes...") 
-              : (useKnowledgePack ? "🧠 Generar con Knowledge Pack" : "🎣 Obtener Hooks Sugeridos")
-            }
-          </button>
+          {/* Submit Buttons */}
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            {/* Main button: Generate 1 */}
+            <button
+              onClick={() => useKnowledgePack ? handleKnowledgePackSubmit(1) : handleSubmit()}
+              disabled={loading}
+              style={{
+                ...glowButton,
+                padding: 18,
+                fontSize: 16,
+                cursor: loading ? "not-allowed" : "pointer",
+                borderRadius: 14,
+                width: useKnowledgePack ? "55%" : "100%",
+                opacity: loading ? 0.75 : 1,
+                transition: "all 0.25s",
+              }}
+              onMouseEnter={(e) => {
+                if (loading) return;
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = `0 0 32px ${colors.accentGlow}, 0 18px 45px rgba(0,0,0,0.50)`;
+              }}
+              onMouseLeave={(e) => {
+                if (loading) return;
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = glowButton.boxShadow;
+              }}
+            >
+              {loading 
+                ? (useKnowledgePack ? "🧠 Generando..." : "🔄 Generando...") 
+                : (useKnowledgePack ? "🧠 Generar Guion" : "🎣 Obtener Hooks")
+              }
+            </button>
+
+            {/* 3 Variants button (only with Knowledge Pack) */}
+            {useKnowledgePack && (
+              <button
+                onClick={() => handleKnowledgePackSubmit(3)}
+                disabled={loading}
+                style={{
+                  background: loading ? "rgba(139, 92, 246, 0.3)" : "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                  boxShadow: "0 0 22px rgba(139, 92, 246, 0.25), 0 10px 30px rgba(0,0,0,0.45)",
+                  border: "none",
+                  color: "#fff",
+                  fontWeight: 900 as const,
+                  padding: 18,
+                  fontSize: 15,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  borderRadius: 14,
+                  width: "45%",
+                  opacity: loading ? 0.75 : 1,
+                  transition: "all 0.25s",
+                }}
+                onMouseEnter={(e) => {
+                  if (loading) return;
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow = "0 0 32px rgba(139, 92, 246, 0.35), 0 18px 45px rgba(0,0,0,0.50)";
+                }}
+                onMouseLeave={(e) => {
+                  if (loading) return;
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 0 22px rgba(139, 92, 246, 0.25), 0 10px 30px rgba(0,0,0,0.45)";
+                }}
+              >
+                {loading ? "⚡ Generando 3..." : "⚡ 3 Variantes"}
+              </button>
+            )}
+          </div>
 
           <p style={{ margin: "12px 0 0", color: "rgba(226,232,240,0.55)", fontSize: 12, textAlign: "center" }}>
             Tip: escribe "Nicho" + "Pilar" y presiona <strong>Enter</strong>.
@@ -1051,7 +1155,7 @@ export default function CreateRun() {
         >
           <p style={{ margin: 0, color: colors.textMuted, fontSize: 12, lineHeight: 1.5 }}>
             <span style={{ color: colors.accent, fontWeight: 800 }}>Egremy Social Engine</span>
-            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v3.8</span>
+            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v4.0</span>
             <span style={{ marginLeft: 6, color: "#c4b5fd", fontSize: 10, fontWeight: 700 }}>+ Knowledge Pack</span>
             <br />
             <span style={{ fontSize: 11, color: "rgba(226,232,240,0.75)" }}>
