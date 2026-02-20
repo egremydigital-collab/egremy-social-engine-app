@@ -594,7 +594,7 @@ ${result.seo_pack.alt_text}`;
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#c4b5fd" }}>⚡ 3 Variantes generadas</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#c4b5fd" }}>⚡ 2 Variantes generadas</span>
               <span style={{ fontSize: 11, color: colors.textMuted }}>Selecciona la que mejor se adapte</span>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
