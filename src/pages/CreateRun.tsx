@@ -230,7 +230,7 @@ export default function CreateRun() {
   };
 
   // === KNOWLEDGE PACK SUBMIT HANDLER ===
-  const handleKnowledgePackSubmit = async (variantCount: 1 | 3 = 1) => {
+  const handleKnowledgePackSubmit = async (variantCount: 1 | 2 = 1) => {
     if (!formData.niche || !formData.pillar) {
       alert("Por favor completa Nicho y Pilar");
       return;
@@ -1068,7 +1068,7 @@ export default function CreateRun() {
             {/* 3 Variants button (only with Knowledge Pack) */}
             {useKnowledgePack && (
               <button
-                onClick={() => handleKnowledgePackSubmit(3)}
+                onClick={() => handleKnowledgePackSubmit(2)}
                 disabled={loading}
                 style={{
                   background: loading ? "rgba(139, 92, 246, 0.3)" : "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
@@ -1095,7 +1095,7 @@ export default function CreateRun() {
                   e.currentTarget.style.boxShadow = "0 0 22px rgba(139, 92, 246, 0.25), 0 10px 30px rgba(0,0,0,0.45)";
                 }}
               >
-                {loading ? "⚡ Generando 3..." : "⚡ 3 Variantes"}
+                {loading ? "⚡ Generando 2..." : "⚡ 2 Variantes"}
               </button>
             )}
           </div>
@@ -1155,7 +1155,7 @@ export default function CreateRun() {
         >
           <p style={{ margin: 0, color: colors.textMuted, fontSize: 12, lineHeight: 1.5 }}>
             <span style={{ color: colors.accent, fontWeight: 800 }}>Egremy Social Engine</span>
-            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v4.0</span>
+            <span style={{ marginLeft: 8, color: colors.warning, fontSize: 10, fontWeight: 700 }}>v4.1</span>
             <span style={{ marginLeft: 6, color: "#c4b5fd", fontSize: 10, fontWeight: 700 }}>+ Knowledge Pack</span>
             <br />
             <span style={{ fontSize: 11, color: "rgba(226,232,240,0.75)" }}>

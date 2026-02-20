@@ -20,7 +20,7 @@ export interface GeneratePSPInput {
   tono: string;
   formato_video: string;
   language: string;
-  variants?: 1 | 3;
+  variants?: 1 | 2;
 }
 
 export interface GeneratePSPResponse {
