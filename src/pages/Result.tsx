@@ -232,6 +232,8 @@ function findWeakestDimension(
 export default function Result() {
   const nav = useNavigate();
   const [result, setResult] = useState<GenerationResult | null>(null);
+  const [variants, setVariants] = useState<GenerationResult[]>([]);
+  const [selectedVariant, setSelectedVariant] = useState(0);
   const [viewMode, setViewMode] = useState<"TEAM" | "CLIENT">("TEAM");
   const [activeTab, setActiveTab] = useState<"script" | "production" | "seo">("script");
 
@@ -239,6 +241,21 @@ export default function Result() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    const mode = localStorage.getItem("generation_mode");
+    
+    // === MULTI-VARIANT MODE ===
+    if (mode === "MULTI_VARIANT") {
+      const savedVariants = localStorage.getItem("generation_variants");
+      if (savedVariants) {
+        const parsed = JSON.parse(savedVariants) as GenerationResult[];
+        setVariants(parsed);
+        setSelectedVariant(0);
+        setResult(parsed[0]); // Show best variant by default
+        return;
+      }
+    }
+    
+    // === SINGLE VARIANT MODE (backward compatible) ===
     const savedResult = localStorage.getItem("generation_result");
     if (savedResult) {
       setResult(JSON.parse(savedResult));
@@ -563,6 +580,75 @@ ${result.seo_pack.alt_text}`;
 
         {/* Quality Score Badge (nuevo v6) - Solo TEAM */}
         {viewMode === "TEAM" && <QualityScoreBadge />}
+
+        {/* === VARIANT SELECTOR (only in multi-variant mode) === */}
+        {variants.length > 1 && viewMode === "TEAM" && (
+          <div
+            style={{
+              ...cardStyle,
+              marginTop: 16,
+              marginBottom: 0,
+              padding: 16,
+              background: "linear-gradient(135deg, rgba(139, 92, 246, 0.10) 0%, rgba(88, 28, 135, 0.08) 100%)",
+              borderColor: "rgba(139, 92, 246, 0.30)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#c4b5fd" }}>⚡ 3 Variantes generadas</span>
+              <span style={{ fontSize: 11, color: colors.textMuted }}>Selecciona la que mejor se adapte</span>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {variants.map((v, idx) => {
+                const isSelected = idx === selectedVariant;
+                const score = v.quality_score || 0;
+                const hookPreview = v.script_psp?.hook?.text?.substring(0, 45) || "Variante";
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedVariant(idx);
+                      setResult(v);
+                    }}
+                    style={{
+                      flex: "1 1 200px",
+                      padding: "12px 16px",
+                      background: isSelected
+                        ? "linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(88, 28, 135, 0.20) 100%)"
+                        : "rgba(2,6,23,0.35)",
+                      border: `2px solid ${isSelected ? "#8b5cf6" : colors.border}`,
+                      borderRadius: 12,
+                      cursor: "pointer",
+                      textAlign: "left" as const,
+                      transition: "all 0.2s",
+                      boxShadow: isSelected ? "0 0 20px rgba(139, 92, 246, 0.20)" : "none",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: isSelected ? "#c4b5fd" : colors.textMuted }}>
+                        Variante {idx + 1}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: score >= 90 ? colors.success : score >= 80 ? colors.warning : colors.error,
+                          background: score >= 90 ? "rgba(16,185,129,0.15)" : score >= 80 ? "rgba(251,191,36,0.15)" : "rgba(239,68,68,0.15)",
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                        }}
+                      >
+                        {score}/100
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 11, color: isSelected ? colors.text : colors.textMuted, lineHeight: 1.4 }}>
+                      &ldquo;{hookPreview}...&rdquo;
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Meta chips - Solo TEAM */}
         {viewMode === "TEAM" && (
