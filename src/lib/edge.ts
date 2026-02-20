@@ -20,6 +20,7 @@ export interface GeneratePSPInput {
   tono: string;
   formato_video: string;
   language: string;
+  variants?: 1 | 3;
 }
 
 export interface GeneratePSPResponse {
@@ -114,7 +115,7 @@ export interface GeneratePSPResponse {
   };
 }
 
-export async function generatePSPScript(input: GeneratePSPInput): Promise<GeneratePSPResponse> {
+export async function generatePSPScript(input: GeneratePSPInput): Promise<any> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
 
@@ -135,5 +136,5 @@ export async function generatePSPScript(input: GeneratePSPInput): Promise<Genera
     throw new Error(data.error);
   }
 
-  return data as GeneratePSPResponse;
+  return data;
 }
